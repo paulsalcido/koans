@@ -38,7 +38,7 @@ class Greed
 
     def scoring_dice
       @values.grouped_roll.
-          keep_if { |k, v| [1, 5].include?(k) or v > 3 }.
+          keep_if { |k, v| [1, 5].include?(k) or v >= 3 }.
           map do |k, v|
             if [ 1, 5 ].include?(k) then
               v.times.map { k }
@@ -46,6 +46,11 @@ class Greed
               3.times.map { k }
             end
           end.flatten.sort
+    end
+
+    def has_scoring_dice
+      puts scoring_dice.inspect
+      scoring_dice.length > 0
     end
 
     class << self
@@ -86,10 +91,18 @@ class AboutGreedAssignment < Neo::Koan
   def test_find_scoring_dice
     assert_equal 5.times.map{ 1 },Greed::DiceSet.new(5.times.map { 1 }).scoring_dice
     assert_equal 5.times.map{ 5 },Greed::DiceSet.new(5.times.map { 5 }).scoring_dice
+    assert_equal [2, 2, 2],Greed::DiceSet.new([2, 2, 2, 3, 3]).scoring_dice
     [2, 3, 4, 6].each do |x|
       assert_equal [ x, x, x ],
           Greed::DiceSet.new(5.times.map { x }).
             scoring_dice
     end
+  end
+
+  def test_has_scoring_dice
+    assert_equal true,Greed::DiceSet.new([1, 2, 2, 3, 3]).has_scoring_dice
+    assert_equal false,Greed::DiceSet.new([4, 2, 2, 3, 3]).has_scoring_dice
+    assert_equal true,Greed::DiceSet.new([5, 2, 2, 3, 3]).has_scoring_dice
+    assert_equal true,Greed::DiceSet.new([2, 2, 2, 3, 3]).has_scoring_dice
   end
 end
