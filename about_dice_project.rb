@@ -6,6 +6,10 @@ require File.expand_path(File.dirname(__FILE__) + '/neo')
 #   code ...
 # end
 
+# I think that a better design for this would be to create
+# a Dice class that had a roll method that created a DiceSet
+# that would be immutable.  Why not immutability?
+
 class DiceSet
   attr_accessor :values
 
