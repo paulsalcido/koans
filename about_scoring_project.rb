@@ -40,7 +40,7 @@ class Array
   end
 
   def fives_score
-      ( ( grouped_roll[5] or 0 ) % 3 ) * 50
+    ( ( grouped_roll[5] or 0 ) % 3 ) * 50
   end
 
   def other_scores
