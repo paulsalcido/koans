@@ -20,14 +20,19 @@ end
 
 class Greed
   class DiceSet
-    attr_reader :values
+    attr_reader :values, :previous_diceset
 
-    def initialize(values)
+    def initialize(values, previous_diceset=nil)
       @values = values 
+      @previous_diceset = previous_diceset
     end
 
     def score
       @values.score
+    end
+
+    def accumulated_score
+      Greed::DiceSet.accumulated_score(0,self)
     end
 
     def nonscoring_dice
@@ -37,7 +42,7 @@ class Greed
     end
 
     def reroll
-      if not has_scoring_dice then
+      if not can_reroll then
         raise IllegalRollError
       else
         Greed::DiceSet.new(
@@ -45,7 +50,7 @@ class Greed
             Greed::DiceSet.roll_array(5)
           else
             scoring_dice + Greed::DiceSet.roll_array(5 - scoring_dice.length)
-          end
+          end, self
         )
       end
     end
@@ -70,6 +75,11 @@ class Greed
       nonscoring_dice.length > 0
     end
 
+    def can_reroll
+      has_scoring_dice and 
+        ( previous_diceset.nil? or scoring_dice.length > previous_diceset.scoring_dice.length or not previous_diceset.has_nonscoring_dice )
+    end
+
     class << self
       def roll
         Greed::DiceSet.new(roll_array(5))
@@ -77,6 +87,16 @@ class Greed
 
       def roll_array(size)
         size.times.map { |x| 1 + rand(6) }
+      end
+
+      def accumulated_score(acc, current, start = true)
+        if current.nil? then
+          acc
+        elsif not current.can_reroll then
+          0
+        else
+          accumulated_score ((start or not current.has_nonscoring_dice)? current.score : 0) + acc, current.previous_diceset, false
+        end
       end
     end
   end
@@ -131,14 +151,16 @@ class AboutGreedAssignment < Neo::Koan
   end
 
   def test_reroll_dice
+
     def check_reroll_values(diceset,previous_diceset,depth)
       unless previous_diceset.nil? then
         diceset.scoring_dice.grouped_roll.each do |k, v|
           assert_equal true, diceset.scoring_dice.grouped_roll[k] >= ( previous_diceset.scoring_dice.grouped_roll[k] || 0 )
+          assert_equal previous_diceset, diceset.previous_diceset
         end
       end
       return unless depth > 0
-      if diceset.scoring_dice.length == 0 then
+      if not diceset.can_reroll then
         check_reroll_values(Greed::DiceSet.roll,nil,depth - 1)
       elsif diceset.scoring_dice.length == 5 then
         check_reroll_values(diceset.reroll,nil,depth - 1)
@@ -148,5 +170,20 @@ class AboutGreedAssignment < Neo::Koan
     end
 
     check_reroll_values(Greed::DiceSet.roll,nil,100)
+  end
+
+  def test_accumulated_score
+    diceset_item = Greed::DiceSet.new([1, 1, 1, 1, 1])
+    assert_equal 1200, diceset_item.accumulated_score
+    diceset_item = Greed::DiceSet.new([1, 1, 1, 1, 1],diceset_item)
+    assert_equal 2400, diceset_item.accumulated_score
+    diceset_item = Greed::DiceSet.new([2, 2, 5, 5, 3],diceset_item)
+    assert_equal 2500, diceset_item.accumulated_score
+    diceset_item = Greed::DiceSet.new([5, 5, 1, 2, 3],diceset_item)
+    assert_equal 2600, diceset_item.accumulated_score
+    diceset_item = Greed::DiceSet.new([5, 5, 1, 1, 1],diceset_item)
+    assert_equal 3500, diceset_item.accumulated_score
+    diceset_item = Greed::DiceSet.new([2, 2, 3, 3, 6],diceset_item)
+    assert_equal 0, diceset_item.accumulated_score
   end
 end
