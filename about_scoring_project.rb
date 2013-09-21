@@ -31,31 +31,39 @@ require File.expand_path(File.dirname(__FILE__) + '/neo')
 
 def score(dice)
   # You need to write this method
-  grouped_dice = dice.group_by { |x| x }
-  fives_score(grouped_dice) +
-    ones_score(grouped_dice) +
-    other_scores(grouped_dice)
+  dice.score
 end
 
-def fives_score(grouped_dice)
-  if grouped_dice[5] then
-    ( grouped_dice[5].length % 3) * 50
-  else
-    0
+class Array
+  def grouped_roll
+    Hash[group_by { |x| x }.map { |k, v| [ k , v.length ] }] 
+  end
+
+  def fives_score
+    if self.grouped_roll[5] then
+      ( self.grouped_roll[5] % 3) * 50
+    else
+      0
+    end
+  end
+
+  def other_scores
+    grouped_roll.keep_if { |key, value| key != 1 and value > 2 }.keys.map { |x| x * 100 }.reduce(:+) or 0
+  end
+
+  def ones_score
+    if ( grouped_roll[1] ) then
+      (grouped_roll[1] >= 3 ? 1000 : 0) + ( (grouped_roll[1] % 3) * 100)
+    else
+      0
+    end
+  end
+
+  def score 
+    fives_score + ones_score + other_scores
   end
 end
 
-def ones_score(grouped_dice)
-  if ( grouped_dice[1] ) then
-    (grouped_dice[1].length >= 3 ? 1000 : 0) + ( (grouped_dice[1].length % 3) * 100)
-  else
-    0
-  end
-end
-
-def other_scores(grouped_dice)
-  grouped_dice.keep_if { |key, value| key != 1 and value.length > 2 }.keys.map { |x| x * 100 }.reduce(:+) or 0
-end
 
 class AboutScoringProject < Neo::Koan
   def test_score_of_an_empty_list_is_zero
