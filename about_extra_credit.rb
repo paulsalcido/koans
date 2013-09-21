@@ -10,7 +10,7 @@ require 'set'
 # Write a player class and a Game class to complete the project.  This
 # is a free form assignment, so approach it however you desire.
 #
-#
+
 class Hash
   def as_dice_array
     puts self.inspect
@@ -19,6 +19,36 @@ class Hash
 end
 
 class Greed
+  class Turn
+    attr_reader :diceset
+
+    def initialize(diceset)
+      @diceset = diceset
+    end
+
+    def score
+      @diceset.accumulated_score
+    end
+
+    def can_reroll
+      @diceset.can_reroll
+    end
+
+    def roll
+      if @diceset.can_reroll then
+        Turn.new(@diceset.reroll)
+      else
+        raise IllegalRollError
+      end
+    end
+
+    class << self
+      def start
+        Greed::Turn.new(Greed::DiceSet.roll)
+      end
+    end
+  end
+
   class DiceSet
     attr_reader :values, :previous_diceset
 
@@ -152,14 +182,14 @@ class AboutGreedAssignment < Neo::Koan
 
   def test_reroll_dice
 
-    def check_reroll_values(diceset,previous_diceset,depth)
+    def check_reroll_values(diceset,previous_diceset,depth = 100)
+      return unless depth > 0
       unless previous_diceset.nil? then
         diceset.scoring_dice.grouped_roll.each do |k, v|
           assert_equal true, diceset.scoring_dice.grouped_roll[k] >= ( previous_diceset.scoring_dice.grouped_roll[k] || 0 )
           assert_equal previous_diceset, diceset.previous_diceset
         end
       end
-      return unless depth > 0
       if not diceset.can_reroll then
         check_reroll_values(Greed::DiceSet.roll,nil,depth - 1)
       elsif diceset.scoring_dice.length == 5 then
@@ -169,7 +199,7 @@ class AboutGreedAssignment < Neo::Koan
       end
     end
 
-    check_reroll_values(Greed::DiceSet.roll,nil,100)
+    check_reroll_values(Greed::DiceSet.roll,nil)
   end
 
   def test_accumulated_score
@@ -186,4 +216,31 @@ class AboutGreedAssignment < Neo::Koan
     diceset_item = Greed::DiceSet.new([2, 2, 3, 3, 6],diceset_item)
     assert_equal 0, diceset_item.accumulated_score
   end
+
+  def test_turn_rolling
+    def turn_rolling(turn,previous_turn = nil,depth = 100)
+      return unless depth > 0
+      if ( turn.nil? )
+        turn_rolling(Greed::Turn.start,nil,depth - 1)
+      else
+        if ( previous_turn )
+          assert_equal true, previous_turn != turn
+        else
+          assert_equal true, turn.diceset.previous_diceset.nil?
+        end
+        assert_equal turn.score, turn.diceset.accumulated_score
+        assert_equal turn.can_reroll, turn.diceset.can_reroll
+        if turn.can_reroll then
+          assert_equal true, turn.score > 0
+          turn_rolling(turn.roll,turn,depth - 1)
+        else
+          assert_equal true, turn.score == 0
+          turn_rolling(Greed::Turn.start,nil,depth - 1)
+        end
+      end
+    end
+
+    turn_rolling(Greed::Turn.start)
+  end
+
 end
