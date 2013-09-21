@@ -36,6 +36,20 @@ class Greed
           map { |k, v| (v % 3).times.map { k } }.flatten.sort
     end
 
+    def reroll
+      if not has_scoring_dice then
+        raise IllegalRollError
+      else
+        Greed::DiceSet.new(
+          if not has_nonscoring_dice then
+            Greed::DiceSet.roll_array(5)
+          else
+            scoring_dice + Greed::DiceSet.roll_array(5 - scoring_dice.length)
+          end
+        )
+      end
+    end
+
     def scoring_dice
       @values.grouped_roll.
           keep_if { |k, v| [1, 5].include?(k) or v >= 3 }.
@@ -49,15 +63,25 @@ class Greed
     end
 
     def has_scoring_dice
-      puts scoring_dice.inspect
       scoring_dice.length > 0
+    end
+
+    def has_nonscoring_dice
+      nonscoring_dice.length > 0
     end
 
     class << self
       def roll
-        Greed::DiceSet.new(5.times.map { |x| 1 + rand(6) })
+        Greed::DiceSet.new(roll_array(5))
+      end
+
+      def roll_array(size)
+        size.times.map { |x| 1 + rand(6) }
       end
     end
+  end
+
+  class IllegalRollError < ::StandardError
   end
 end
 
@@ -104,5 +128,25 @@ class AboutGreedAssignment < Neo::Koan
     assert_equal false,Greed::DiceSet.new([4, 2, 2, 3, 3]).has_scoring_dice
     assert_equal true,Greed::DiceSet.new([5, 2, 2, 3, 3]).has_scoring_dice
     assert_equal true,Greed::DiceSet.new([2, 2, 2, 3, 3]).has_scoring_dice
+  end
+
+  def test_reroll_dice
+    def check_reroll_values(diceset,previous_diceset,depth)
+      unless previous_diceset.nil? then
+        diceset.scoring_dice.grouped_roll.each do |k, v|
+          assert_equal true, diceset.scoring_dice.grouped_roll[k] >= ( previous_diceset.scoring_dice.grouped_roll[k] || 0 )
+        end
+      end
+      return unless depth > 0
+      if diceset.scoring_dice.length == 0 then
+        check_reroll_values(Greed::DiceSet.roll,nil,depth - 1)
+      elsif diceset.scoring_dice.length == 5 then
+        check_reroll_values(diceset.reroll,nil,depth - 1)
+      else
+        check_reroll_values(diceset.reroll,diceset,depth - 1)
+      end
+    end
+
+    check_reroll_values(Greed::DiceSet.roll,nil,100)
   end
 end
