@@ -31,6 +31,30 @@ require File.expand_path(File.dirname(__FILE__) + '/neo')
 
 def score(dice)
   # You need to write this method
+  grouped_dice = dice.group_by { |x| x }
+  fives_score(grouped_dice) +
+    ones_score(grouped_dice) +
+    other_scores(grouped_dice)
+end
+
+def fives_score(grouped_dice)
+  if grouped_dice[5] then
+    ( grouped_dice[5].length % 3) * 50
+  else
+    0
+  end
+end
+
+def ones_score(grouped_dice)
+  if ( grouped_dice[1] ) then
+    (grouped_dice[1].length >= 3 ? 1000 : 0) + ( (grouped_dice[1].length % 3) * 100)
+  else
+    0
+  end
+end
+
+def other_scores(grouped_dice)
+  grouped_dice.keep_if { |key, value| key != 1 and value.length > 2 }.keys.map { |x| x * 100 }.reduce(:+) or 0
 end
 
 class AboutScoringProject < Neo::Koan
