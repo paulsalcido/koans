@@ -40,23 +40,15 @@ class Array
   end
 
   def fives_score
-    if self.grouped_roll[5] then
-      ( self.grouped_roll[5] % 3) * 50
-    else
-      0
-    end
+      ( ( grouped_roll[5] or 0 ) % 3 ) * 50
   end
 
   def other_scores
-    grouped_roll.keep_if { |key, value| key != 1 and value > 2 }.keys.map { |x| x * 100 }.reduce(:+) or 0
+    grouped_roll.keep_if { |key, value| value > 2 }.keys.map { |x| x * ( ( x == 1 ) ? 1000 : 100 ) }.reduce(:+) or 0
   end
 
   def ones_score
-    if ( grouped_roll[1] ) then
-      (grouped_roll[1] >= 3 ? 1000 : 0) + ( (grouped_roll[1] % 3) * 100)
-    else
-      0
-    end
+    ( ( grouped_roll[1] or 0 ) % 3 ) * 100
   end
 
   def score 
