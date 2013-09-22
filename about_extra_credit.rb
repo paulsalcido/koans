@@ -19,31 +19,102 @@ class Hash
 end
 
 class Greed
-  class Turn
-    attr_reader :diceset
+  class Game
+    attr_reader :players, :current_player_turn
 
-    def initialize(diceset)
+    def initialize(players,current_player_turn = 0)
+      @players = players
+      @current_player_turn = current_player_turn
+    end
+
+    def current_player
+      @players[@current_player_turn]
+    end
+
+    def start_turn
+      update_game_state(current_player.start_turn,@current_player_turn)
+    end
+
+    def finish_turn
+      update_game_state(current_player.finish,@current_player_turn + 1)
+    end
+
+    def roll
+    end
+
+    class << self
+      def start(num_players)
+        Greed::Game.new(Hash[ (0 .. num_players - 1).map { |x| [ x , Greed::Player.new ] } ])
+      end
+    end
+
+    private
+      def update_game_state(player,current_player_turn)
+        Greed::Game.new(players.merge({ @current_player_turn => player }),current_player_turn)
+      end
+  end
+
+  class Player
+    attr_reader :turn, :finished
+
+    def initialize(turn = nil, finished = false)
+      @turn = turn
+      @finished = ( turn.nil? ? finished : turn.finished )
+    end
+
+    def score
+      @turn.nil? ? 0 : @turn.accumulated_score
+    end
+
+    # TODO make roll, finish and start_turn work together better.
+    def start_turn
+      Greed::Player.new(Greed::Turn.new(Greed::DiceSet.roll,@turn))
+    end
+
+    def roll
+      @turn.nil? ? start_turn : Greed::Player.new(@turn.roll)
+    end
+
+    def finish
+      Greed::Player.new(@turn,true)
+    end
+  end
+
+  class Turn
+    attr_reader :diceset, :previous_turn, :finished
+
+    def initialize(diceset, previous_turn = nil, finished = false)
       @diceset = diceset
+      @previous_turn = previous_turn
+      @finished = ( finished or @diceset.can_reroll == false )
+    end
+
+    def finish
+      Greed::Turn.new(@diceset, @previous_turn, true) unless @finished
     end
 
     def score
       @diceset.accumulated_score
     end
 
+    def accumulated_score
+      score + ( @previous_turn.nil? ? 0 : @previous_turn.accumulated_score )
+    end
+
     def can_reroll
-      @diceset.can_reroll
+      @diceset.can_reroll and not @finished
     end
 
     def roll
-      if @diceset.can_reroll then
-        Turn.new(@diceset.reroll)
+      if can_reroll then
+        Turn.new(@diceset.reroll, @previous_turn)
       else
         raise IllegalRollError
       end
     end
 
     class << self
-      def start
+      def start(previous_turn = nil)
         Greed::Turn.new(Greed::DiceSet.roll)
       end
     end
@@ -241,6 +312,49 @@ class AboutGreedAssignment < Neo::Koan
     end
 
     turn_rolling(Greed::Turn.start)
+
+    (1 .. 5).each.map { Greed::Turn.new(Greed::DiceSet.roll,nil,true) }.each do |turn|
+      assert_equal true, turn.finished
+      assert_equal false, turn.can_reroll
+    end
+
+    assert_equal 1100 + 500, Greed::Turn.new(Greed::DiceSet.new([1, 1, 1, 5, 5]),Greed::Turn.new(Greed::DiceSet.new([5, 5, 5, 2, 2]))).accumulated_score
   end
 
+  def test_basic_player
+    player = Greed::Player.new
+
+    assert_equal nil, player.turn
+    assert_equal false, player.finished
+
+    # The code is functional, this part is not, so I'm going to have to
+    # do this.
+    player.start_turn
+    player = player.roll
+    score = player.turn.diceset.score
+    assert_equal score, player.score
+
+
+    player = player.finish
+    player = player.start_turn
+
+    score += player.turn.diceset.score
+    assert_equal score, player.score
+  end
+
+  def test_basic_game
+    game = Greed::Game.start(4)
+
+    assert_equal 4, game.players.keys.length
+    assert_equal 0, game.current_player_turn
+    assert_equal game.players[0], game.current_player
+
+    (1 .. 4).each do
+      assert_equal true, game.current_player.turn.nil?
+      game = game.start_turn
+      assert_equal false, game.current_player.turn.nil?
+      assert_equal game.current_player.turn.accumulated_score, game.current_player.score
+      game = game.finish_turn
+    end
+  end
 end
