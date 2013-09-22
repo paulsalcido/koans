@@ -19,16 +19,44 @@ class Hash
 end
 
 class Greed
-  class Game
-    attr_reader :players, :current_player_turn
+  class InteractiveGame
+    class << self
+      def run(gamestate = Greed::Game.start)
+      end
+    end
+  end
 
-    def initialize(players,current_player_turn = 0)
+  class Game
+    attr_reader :players, :current_player_turn, :previous_game_state, :finished
+
+    def initialize(players,current_player_turn = 0,previous_game_state = nil, finished = false)
       @players = players
       @current_player_turn = current_player_turn
+      @previous_game_state = previous_game_state
+    end
+
+    def previous_roll
+      if ( current_player.turn_depth < 2 ) then
+        previous_player.last_diceset
+      else
+        current_player.turn.previous_turn.diceset
+      end
     end
 
     def current_player
       @players[@current_player_turn]
+    end
+
+    def last_roll
+      "Previous Roll: #{previous_roll.nil? ? '' : previous_roll.pretty}"
+    end
+
+    def pretty
+      "#{last_roll}\n#{current_player.pretty}\n#{game_score_string}\n"
+    end
+
+    def game_score_string
+      players.keys.sort.map { |x| "Player #{x} score: #{@players[x].score}\n" }.join
     end
 
     def start_turn
@@ -39,27 +67,66 @@ class Greed
       update_game_state(current_player.finish,@current_player_turn + 1)
     end
 
+    def end_game
+      update_game_state(current_player,@current_player_turn,true)
+    end
+
+    # Find a way to make this force us into the next game state...
     def roll
+      ( current_player.turn_finished? ? finish_turn.prepare_player : self ).
+        update_game_state(current_player.roll,@current_player_turn).roll_check
+    end
+
+    def prepare_player
+      update_game_state(current_player.start_turn,@current_player_turn)
+    end
+
+    def update_game_state(player,new_player_turn,finished = false)
+      Greed::Game.new(players.merge({ @current_player_turn => player }),new_player_turn % players.keys.length,self,finished)
+    end
+
+    def previous_player
+      players[previous_player_number]
+    end
+
+    def previous_player_number
+      current_player_turn == 0 ? players.keys.length - 1 : current_player_turn - 1
+    end
+
+    def roll_check
+      if current_player.turn_finished? then
+        finish_turn.prepare_player
+      else
+        self
+      end
     end
 
     class << self
       def start(num_players)
-        Greed::Game.new(Hash[ (0 .. num_players - 1).map { |x| [ x , Greed::Player.new ] } ])
+        Greed::Game.new(Hash[ (0 .. num_players - 1).map { |x| [ x , Greed::Player.new(nil,false,x) ] } ])
       end
     end
-
-    private
-      def update_game_state(player,current_player_turn)
-        Greed::Game.new(players.merge({ @current_player_turn => player }),current_player_turn)
-      end
   end
 
   class Player
-    attr_reader :turn, :finished
+    attr_reader :turn, :finished, :number
 
-    def initialize(turn = nil, finished = false)
+    def initialize(turn = nil, finished = false, number = 0)
       @turn = turn
+      @number = number
       @finished = ( turn.nil? ? finished : turn.finished )
+    end
+
+    def turn_depth
+      @turn.nil? ? 0 : @turn.depth
+    end
+
+    def last_diceset
+      @turn.nil? ? nil : @turn.diceset
+    end
+
+    def pretty
+      "Player #{@number}: #{@turn.nil? ? '' : @turn.pretty}"
     end
 
     def score
@@ -68,15 +135,23 @@ class Greed
 
     # TODO make roll, finish and start_turn work together better.
     def start_turn
-      Greed::Player.new(Greed::Turn.new(Greed::DiceSet.roll,@turn))
+      Greed::Player.new(Greed::Turn.new(Greed::DiceSet.roll,@turn),false,@number)
+    end
+
+    def turn_finished?
+      @finished
+    end
+
+    def turn_started?
+      @turn.nil?
     end
 
     def roll
-      @turn.nil? ? start_turn : Greed::Player.new(@turn.roll)
+      turn_started? ? start_turn.roll : Greed::Player.new(@turn.roll,false,@number)
     end
 
     def finish
-      Greed::Player.new(@turn,true)
+      Greed::Player.new(@turn,true,@number)
     end
   end
 
@@ -95,6 +170,18 @@ class Greed
 
     def score
       @diceset.accumulated_score
+    end
+
+    def depth(acc = 1)
+      unless @previous_turn
+        acc
+      else
+        @previous_turn.depth(acc + 1)
+      end
+    end
+
+    def pretty
+      "Turn #{self.depth}: Roll #{@diceset.depth}: #{@diceset.pretty}"
     end
 
     def accumulated_score
@@ -132,6 +219,14 @@ class Greed
       @values.score
     end
 
+    def depth(acc = 1)
+      unless @previous_diceset
+        acc
+      else
+        previous_diceset.depth(acc + 1)
+      end
+    end
+
     def accumulated_score
       Greed::DiceSet.accumulated_score(0,self)
     end
@@ -140,6 +235,10 @@ class Greed
       @values.grouped_roll.
           keep_if { |k, v| (not [1, 5].include?(k)) and (v % 3) > 0 }.
           map { |k, v| (v % 3).times.map { k } }.flatten.sort
+    end
+
+    def pretty
+      "DiceSet: " + @values.sort.join(", ")
     end
 
     def reroll
@@ -326,11 +425,11 @@ class AboutGreedAssignment < Neo::Koan
 
     assert_equal nil, player.turn
     assert_equal false, player.finished
+    assert_equal 0, player.number
 
     # The code is functional, this part is not, so I'm going to have to
     # do this.
-    player.start_turn
-    player = player.roll
+    player = player.start_turn
     score = player.turn.diceset.score
     assert_equal score, player.score
 
@@ -356,5 +455,19 @@ class AboutGreedAssignment < Neo::Koan
       assert_equal game.current_player.turn.accumulated_score, game.current_player.score
       game = game.finish_turn
     end
+
+    game = Greed::Game.start(4)
+
+    assert_equal 0, game.current_player_turn
+    game = game.finish_turn
+    assert_equal 1, game.current_player_turn
+    game = game.finish_turn
+    assert_equal 2, game.current_player_turn
+    game = game.finish_turn
+    assert_equal 3, game.current_player_turn
+    game = game.finish_turn
+    assert_equal 0, game.current_player_turn
+    game = game.finish_turn
+    assert_equal 1, game.current_player_turn
   end
 end
