@@ -255,7 +255,7 @@ class Greed
   class DiceSet
     attr_reader :values, :previous_diceset
 
-    def initialize(values, previous_diceset=nil)
+    def initialize(values, previous_diceset=Greed::NullDiceSet.new)
       @values = values 
       @previous_diceset = previous_diceset
     end
@@ -265,11 +265,7 @@ class Greed
     end
 
     def depth(acc = 1)
-      unless @previous_diceset
-        acc
-      else
-        previous_diceset.depth(acc + 1)
-      end
+      previous_diceset.depth(acc + 1)
     end
 
     def accumulated_score
@@ -322,7 +318,7 @@ class Greed
 
     def can_reroll?
       has_scoring_dice? and 
-        ( previous_diceset.nil? or scoring_dice.length > previous_diceset.scoring_dice.length or not previous_diceset.has_nonscoring_dice? )
+        ( scoring_dice.length > previous_diceset.scoring_dice.length or not previous_diceset.has_nonscoring_dice? )
     end
 
     class << self
@@ -343,6 +339,51 @@ class Greed
           accumulated_score ((start or not current.has_nonscoring_dice?)? current.score : 0) + acc, current.previous_diceset, false
         end
       end
+    end
+  end
+
+  class NullDiceSet < DiceSet
+
+    # Allow null initialization.
+    def initialize
+      @values = nil
+      @previous_diceset = nil
+    end
+
+    def nil?
+      true
+    end
+
+    def score
+      0
+    end
+
+    def pretty
+      ''
+    end
+
+    def can_reroll?
+      true
+    end
+
+    def scoring_dice
+      [ ]
+    end
+
+    def nonscoring_dice
+      [ ]
+    end
+
+    def has_scoring_dice?
+      false
+    end
+
+    def has_nonscoring_dice?
+      false
+    end
+
+    def depth(acc = 0)
+      acc
     end
   end
 
@@ -440,8 +481,6 @@ class AboutGreedAssignment < Neo::Koan
       else
         if ( previous_turn )
           assert_equal true, previous_turn != turn
-        else
-          assert_equal true, turn.diceset.previous_diceset.nil?
         end
         assert_equal turn.score, turn.diceset.accumulated_score
         assert_equal turn.can_reroll?, turn.diceset.can_reroll?
